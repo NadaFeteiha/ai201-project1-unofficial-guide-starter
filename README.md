@@ -1,31 +1,29 @@
 # The Unofficial Guide — Project 1
 
-A Retrieval-Augmented Generation (RAG) system that makes informal reader reviews of
-mystery, thriller, and horror books searchable and answerable. Ask a plain-language
-question and get a grounded, source-cited answer drawn from real Goodreads reviews.
+A Retrieval-Augmented Generation (RAG) system that lets you search what real readers say
+about mystery, thriller, and horror books. You ask a question in plain language and get an
+answer that is based on real Goodreads reviews, with the sources listed.
 
 ---
 
 ## Domain
 
-This system covers **mystery, thriller, and horror book reviews** — specifically, what
-real readers say about popular books in these genres.
+This system is about **reader reviews of mystery, thriller, and horror books** — what real
+readers actually say about popular books in these genres.
 
-This knowledge is valuable because official sources (publisher blurbs, professional
-critic reviews) are polished and biased toward selling books. What readers actually
-experience — slow pacing, predictable twists, disappointing endings, unexpected
-emotional impact — lives in informal spaces like Goodreads, Reddit, and Amazon. A reader
-deciding whether a book is right for them can't easily search across all those scattered
-opinions and get a grounded, summarized answer. This system makes that informal reader
-knowledge searchable.
+This is useful because official sources (like the publisher's description or professional
+critics) are polished and try to sell the book. What readers really feel — slow pacing,
+predictable twists, weak endings — is spread across places like Goodreads, Reddit, and
+Amazon. A reader who wants to decide if a book is right for them cannot easily search all
+those scattered opinions and get one clear answer. This system does that for them.
 
 ---
 
 ## Document Sources
 
-8 plain-text files, each containing 8–9 real reader reviews collected from Goodreads.
-Each file deliberately mixes 5-star, 3-star, and 1-star reviews to capture a range of
-opinion. **Total: 69 reviews → 359 chunks.**
+8 plain-text files. Each file has 8–9 real reader reviews from Goodreads. Each file mixes
+5-star, 3-star, and 1-star reviews on purpose, so we get different opinions.
+**Total: 69 reviews → 359 chunks.**
 
 | # | Source | Type | URL or file path |
 |---|--------|------|-----------------|
@@ -42,82 +40,76 @@ opinion. **Total: 69 reviews → 359 chunks.**
 
 ## Chunking Strategy
 
-**Chunk size:** 250 characters (target range 200–300)
+**Chunk size:** 250 characters (range 200–300)
 
 **Overlap:** 50 characters
 
-**Why these choices fit your documents:** The documents are short, opinion-based reader
-reviews, not long-form guides. Each review expresses a few distinct thoughts in a handful
-of sentences. A ~250-character chunk captures roughly one complete opinion (e.g. "the
-pacing was slow but the ending was worth it"), so each embedding encodes a single clear
-idea and semantic search can match a query about *pacing* to a chunk specifically about
-pacing — rather than to a 1,000-character chunk that also covers characters, plot, and
-style. The 50-character overlap means that if one opinion spans a chunk boundary, part of
-it still appears in both chunks.
+**Why this fits the documents:** The documents are short reviews, not long articles. Each
+review says a few short things. A chunk of about 250 characters holds about one full
+opinion (for example, "the pacing was slow but the ending was worth it"). So each chunk has
+one clear idea, and search can match a question about *pacing* to a chunk about *pacing*,
+instead of a big chunk that mixes pacing, characters, and plot together. The 50-character
+overlap means if one opinion sits on the line between two chunks, part of it stays in both
+chunks, so we do not lose it.
 
-**Preprocessing before chunking** (`ingestion.py`): each file is loaded, its title header
-line is stripped, and the text is split into individual reviews using a regex on the
-`REVIEW N (M stars):` markers — capturing the **review number** and **star rating** as
-metadata. Whitespace and smart quotes are normalized. Each review is then chunked with
-LangChain's `RecursiveCharacterTextSplitter` (`chunk_size=250`, `chunk_overlap=50`,
-splitting preferentially on paragraph → sentence → word boundaries). Every chunk carries
-its source filename, book title, review number, and rating.
+**Preprocessing before chunking** (`ingestion.py`): each file is loaded, the title line is
+removed, and the text is split into single reviews using the `REVIEW N (M stars):` markers.
+We save the **review number** and **star rating** as metadata. We also clean up extra spaces
+and smart quotes. Then each review is split with LangChain's `RecursiveCharacterTextSplitter`
+(`chunk_size=250`, `chunk_overlap=50`). Every chunk keeps its source file name, book title,
+review number, and rating.
 
-**Final chunk count:** 359 chunks across 8 documents (69 reviews). Average chunk length
-~169 characters.
+**Final chunk count:** 359 chunks from 8 documents (69 reviews). Average chunk is about 169
+characters.
 
 ---
 
 ## Embedding Model
 
-**Model used:** `all-MiniLM-L6-v2` via `sentence-transformers`. It runs locally with no
-API key or rate limits, performs well on short English text, and is fast and lightweight
-— a good fit for a student project with short review text. Chunks are stored in a local
-**ChromaDB** collection configured for **cosine distance**, with `top-k = 5`.
+**Model used:** `all-MiniLM-L6-v2` from `sentence-transformers`. It runs on my computer with
+no API key and no rate limits, it works well on short English text, and it is fast and small
+— a good fit for short reviews. The chunks are stored in a local **ChromaDB** database that
+uses **cosine distance**, and we retrieve the **top 5** chunks per question.
 
-**Production tradeoff reflection:** If I were deploying this for real users and cost
-weren't a constraint, I'd weigh:
-- **Accuracy on nuanced opinion text:** A larger model like OpenAI `text-embedding-3-large`
-  would better distinguish subtle sentiment ("loved the twist" vs. "saw the twist coming"),
-  improving retrieval precision on opinion-heavy queries.
-- **Context length:** `all-MiniLM-L6-v2` truncates at 256 tokens. Fine for short reviews,
-  but it would silently drop content if I expanded to long-form guides or full articles —
-  a longer-context model would be necessary there.
-- **Multilingual support:** For non-English reviews I'd switch to something like
+**If I deployed this for real users (cost not a problem), I would think about:**
+- **Accuracy on opinions:** A bigger model like OpenAI `text-embedding-3-large` would
+  understand subtle feelings better (for example, "loved the twist" vs. "saw the twist
+  coming"), so retrieval would be more correct.
+- **Context length:** `all-MiniLM-L6-v2` only reads up to 256 tokens. That is fine for short
+  reviews, but it would cut off long articles. For long text I would need a model with a
+  longer limit.
+- **Other languages:** For non-English reviews I would use a multilingual model like
   `paraphrase-multilingual-MiniLM-L12-v2`.
-- **Local vs. API / latency:** Local embeddings are free and private but slower to index
-  large corpora; an API model is faster and more accurate at scale but adds per-token cost
-  and a network dependency.
+- **Local vs. API:** A local model is free and private but slower for big datasets. An API
+  model is faster and more accurate at scale, but it costs money per token and needs internet.
 
 ---
 
 ## Grounded Generation
 
-The LLM is **Groq `llama-3.3-70b-versatile`**. Grounding is enforced two ways:
+The LLM is **Groq `llama-3.3-70b-versatile`**. We make sure the answer stays grounded
+(based only on the reviews) in two ways:
 
-**System prompt grounding instruction** (`generate.py`): the model is told to answer
-using **only** the provided reviews, with explicit rules:
+**1. The system prompt** (`generate.py`) tells the model to use only the given reviews:
 
 > Answer using only information found in the provided reviews. Do not use any outside
 > knowledge about these books, even if you know it. If the reviews do not contain enough
 > information to answer the question, reply exactly: "I don't have enough information on
 > that." Do not guess or fill in from general knowledge.
 
-Generation runs at a low temperature (0.2) to keep responses close to the source text.
-The retrieved chunks are formatted into a numbered context block (each labeled with its
-source file and star rating) so the model can reference specific reviews.
+We also use a low temperature (0.2) so the model stays close to the text. The retrieved
+chunks are put into a numbered list, and each one shows its source file and rating.
 
-**How source attribution is surfaced in the response:** Source filenames are **appended
-programmatically** from the retrieval metadata after generation — they are not left to the
-model to remember. The de-duplicated list of source files for the retrieved chunks is added
-as a `Sources:` line. Attribution is skipped when the model declines to answer (so an
-out-of-scope refusal doesn't get spurious citations).
+**2. Source attribution is added by the code, not the model.** After the model answers, the
+code adds a `Sources:` line built from the retrieved chunks' metadata. So the sources are
+always correct and do not depend on the model remembering them. If the model says it does
+not have enough information, we do not add any sources.
 
 ---
 
 ## Sample Chunks
 
-Five representative chunks, each with its source document:
+Five example chunks, each with its source file:
 
 1. **`and_then_there_were_none.txt`** (5★) — *"I'm a big lover of Agatha Christie, she has
    written some fantastic murder mysteries and her stories never get tiring. But this is the
@@ -139,77 +131,79 @@ Five representative chunks, each with its source document:
 
 ## Retrieval Test Results
 
-Three queries with their top retrieved chunks (cosine distance — lower is more similar):
+Three questions with their top retrieved chunks (cosine distance — a smaller number means a
+closer match; under 0.5 is a strong match):
 
-**Query 1: "Is And Then There Were None good for first-time mystery readers?"**
-- `and_then_there_were_none.txt` (0.337) — "...one of Agatha Christie's most celebrated mystery novels..."
-- `and_then_there_were_none.txt` (0.339) — "...the book that started my absolute love of the mystery genre..."
-- `and_then_there_were_none.txt` (0.386) — "...absolutely worth adding to your list..."
+**Question 1: "Is And Then There Were None a good first mystery book to read?"**
+- `and_then_there_were_none.txt` (0.275) — "...absolutely worth adding to your list..."
+- `and_then_there_were_none.txt` (0.301) — "...the book that started my absolute love of the mystery genre..."
+- `and_then_there_were_none.txt` (0.305) — "...one of Agatha Christie's most celebrated mystery novels..."
 
-*Why relevant:* All three top hits come from the correct book and speak directly to it as
-a genre entry point — exactly what the query asks. Distances well under 0.5 indicate strong
-matches.
+*Why these are relevant:* All three top chunks come from the correct book and talk about it
+as a good place to start the genre — exactly what the question asks. The distances are well
+under 0.5, so the matches are strong.
 
-**Query 2: "Which book do readers compare most to Gone Girl?"**
+**Question 2: "Which book do readers compare most to Gone Girl?"**
 - `girl_on_the_train.txt` (0.346) — "This has frequently been called the next Gone Girl..."
 - `pretend_you_dont_see_her.txt` (0.386) — "...love affair with the suspense genre..."
 
-*Why relevant:* The #1 hit is the exact review stating *The Girl on the Train* was marketed
-as "the next Gone Girl" — a precise, correct match for the comparison query.
+*Why these are relevant:* The top chunk is the exact review that says *The Girl on the Train*
+was called "the next Gone Girl" — a correct, direct match for the question.
 
-**Query 3: "What do readers say about the pacing of It by Stephen King?"**
+**Question 3: "What do readers say about the pacing of It by Stephen King?"**
 - `girl_on_the_train.txt` (0.362) — "...The pace was slow and sometimes the chapters were just plain boring..."
 - `it.txt` (0.363) — "...the length of the novel. That's a lot of words on a lot of pages..."
 - `it.txt` (0.404) — "...pages long? Does Stephen King not have an editor?"
 
-*Note:* The #1 hit is a strong semantic match for "slow pace" but comes from the **wrong
-book** (*The Girl on the Train*). See the Failure Case Analysis below.
+*Note:* The top chunk is a strong match for "slow pace" but it is from the **wrong book**
+(*The Girl on the Train*). See the Failure Case Analysis below.
 
 ---
 
 ## Example Responses
 
-**Example 1 — grounded answer with sources** (Q: "What are common complaints about Agatha
-Christie's writing style?"):
-> One common complaint is that her story elements can seem "too contrived and stiff" and
-> "amateurishly done" (review 2). Another complaint is that her books do not "stand the
-> test of time" (review 4).
+**Example 1 — grounded answer with sources** (Question: "What do readers complain about in
+Agatha Christie's writing?"):
+> Readers complain that Agatha Christie's stories can seem "too contrived and stiff" with
+> some elements being "amateurishly done" (review 2), and that her books "do not stand the
+> test of time" (review 3).
 >
 > **Sources:** and_then_there_were_none.txt, death_on_the_nile.txt
 
-**Example 2 — grounded answer with sources** (Q: "Which book do readers compare most to
-Gone Girl?"):
-> The book that a reader compares to Gone Girl is "The Girl on the Train".
+**Example 2 — grounded answer with sources** (Question: "Which book do readers compare most
+to Gone Girl?"):
+> The book "The Girl on the Train" is compared to Gone Girl by a reader.
 >
 > **Sources:** girl_on_the_train.txt, pretend_you_dont_see_her.txt, then_she_was_gone.txt, death_on_the_nile.txt
 
-**Example 3 — out-of-scope refusal** (Q: "What do readers say about the ending of Gone
-Girl?"). Gone Girl is not in the document set:
+**Example 3 — out-of-scope refusal** (Question: "What do readers say about the ending of
+Gone Girl?"). Gone Girl is not in our documents:
 > I don't have enough information on that.
 
-The system correctly declines rather than fabricating an answer from the model's general
-knowledge, and no citations are appended.
+The system correctly refuses instead of making up an answer, and it does not add any sources.
 
 ---
 
 ## Query Interface
 
-A **Gradio** web UI (`app.py`), launched with `python app.py` at `http://localhost:7860`.
+A **Gradio** web app (`app.py`). Run `python app.py` and open `http://localhost:7860`.
 
-- **Input field — "Your question":** a free-text box for the user's question (also submits
-  on Enter). Example prompts are provided as clickable buttons.
-- **Output field — "Answer":** the grounded response, including the appended `Sources:` line.
-- **Output field — "Retrieved from":** a bulleted list of the source documents the answer
-  drew from.
+- **Input — "Your question":** a text box for the user's question (you can also press Enter).
+  There are clickable example questions too.
+- **Slider — "Chunks to retrieve (top-k)":** lets the user choose how many chunks to retrieve
+  (1 to 10, default 5).
+- **Output — "Answer":** the grounded answer, with the `Sources:` line at the end.
+- **Output — "Retrieved from":** a simple list of the source files used.
+- **Output — "Retrieved chunks (with distance scores)":** each retrieved chunk with its
+  distance, book title, rating, and text — so you can see exactly what the answer is based on.
 
-**Sample interaction transcript:**
+**Sample interaction:**
 ```
 Your question: What do readers say about the pacing of It by Stephen King?
 
 Answer: According to the reviews, one reader says that "this never lags too much"
-(review [2]), implying the pacing is generally good. However, another reader criticizes
-the book's length ("ELEVEN-FUCKING-HUNDRED pages long", review [4]), suggesting they found
-it overly long.
+(review [2]), so the pacing is generally fine. But another reader complains about the
+length ("ELEVEN-FUCKING-HUNDRED pages long", review [4]), so they found it too long.
 Sources: girl_on_the_train.txt, it.txt, woman_in_the_window.txt
 
 Retrieved from:
@@ -222,13 +216,13 @@ Retrieved from:
 
 ## Evaluation Report
 
-| # | Question | Expected answer | System response (summarized) | Retrieval quality | Response accuracy |
-|---|----------|-----------------|------------------------------|-------------------|-------------------|
-| 1 | Is *And Then There Were None* good for first-time mystery readers? | Yes — reviewers recommend it as a genre starting point | Says it's a good intro per reviews; notes no review literally says "first-time" | Relevant | Accurate |
-| 2 | Common complaints about Agatha Christie's writing style? | Bland/sterile writing, carbon-copy characters, lack of description, dated attitudes | Found "contrived/stiff," "amateurish," "doesn't age well"; missed carbon-copy & dated-attitudes complaints | Partially relevant | Partially accurate |
-| 3 | What do readers say about the pacing of *It*? | Too long/bloated (1000+ pages); fans say length is needed | Mixed: cites length complaints but also a wrong-book chunk; answer muddled | Off-target (top hit wrong book) | Partially accurate |
-| 4 | Which book do readers compare most to *Gone Girl*? | *The Girl on the Train* ("next Gone Girl") | "The Girl on the Train" | Relevant | Accurate |
-| 5 | What do readers say about the ending of *Gone Girl*? | Out-of-scope — should decline | "I don't have enough information on that." | Off-target (no source covers it) | Accurate (correct refusal) |
+| # | Question | Expected answer | System response (short) | Retrieval quality | Response accuracy |
+|---|----------|-----------------|-------------------------|-------------------|-------------------|
+| 1 | Is *And Then There Were None* a good first mystery book to read? | Yes — reviewers say it is a good place to start the genre | Says it is a good first read, but notes no review uses the exact words "first-time" | Relevant | Accurate |
+| 2 | What do readers complain about in Agatha Christie's writing? | Plain/sterile writing, similar characters, little description, old-fashioned attitudes | Found "contrived/stiff," "amateurish," "does not age well"; missed the similar-characters and old-attitudes points | Partially relevant | Partially accurate |
+| 3 | What do readers say about the pacing of *It*? | Many say it is too long (1000+ pages); fans say the length is needed | Mixed: mentions the length, but also used a chunk from the wrong book; answer is unclear | Off-target (top chunk wrong book) | Partially accurate |
+| 4 | Which book do readers compare most to *Gone Girl*? | *The Girl on the Train* (called "the next Gone Girl") | "The Girl on the Train" | Relevant | Accurate |
+| 5 | What do readers say about the ending of *Gone Girl*? | Out-of-scope — the system should refuse | "I don't have enough information on that." | Off-target (no source has it) | Accurate (correct refusal) |
 
 **Retrieval quality:** Relevant / Partially relevant / Off-target
 **Response accuracy:** Accurate / Partially accurate / Inaccurate
@@ -239,72 +233,68 @@ Retrieved from:
 
 **Question that failed:** "What do readers say about the pacing of *It* by Stephen King?"
 
-**What the system returned:** The top-ranked retrieved chunk was from
-`girl_on_the_train.txt` ("The pace was slow and sometimes the chapters were just plain
-boring"), not from `it.txt`. The generated answer mixed signals — quoting "this never lags
-too much" from one *It* review while noting the 1,100-page length from another — and ended
-up vaguer than the expected "many readers find it too long but fans defend the length."
+**What the system returned:** The top chunk came from `girl_on_the_train.txt` ("The pace was
+slow and sometimes the chapters were just plain boring"), not from `it.txt`. The answer was a
+mix — it quoted "this never lags too much" from one *It* review and the 1,100-page complaint
+from another — so it was less clear than the expected answer (most readers find *It* too long,
+but fans defend the length).
 
-**Root cause (tied to a specific pipeline stage):** This is a **retrieval** failure driven
-by the **chunking + embedding** stages. My chunks are small (~250 chars) and deliberately
-encode a single idea. A chunk whose single idea is "the pace was slow and chapters were
-boring" is an extremely strong semantic match for a *pacing* query — regardless of which
-book it describes. Because the book title often isn't repeated inside every chunk, the
-embedding has no signal to prefer the correct book, so a generic "slow pacing" comment
-about *The Girl on the Train* out-ranks the actual *It* reviews. This is the exact
-"retrieval returns reviews from the wrong book" risk anticipated in `planning.md`.
+**Root cause (which part of the pipeline):** This is a **retrieval** problem caused by the
+**chunking + embedding** steps. My chunks are small (~250 characters) and each one holds one
+idea. A chunk that says "the pace was slow and the chapters were boring" is a very strong
+match for a *pacing* question — no matter which book it is about. Because the book title is
+often not repeated inside every chunk, the embedding has no way to prefer the correct book.
+So a general "slow pacing" comment about *The Girl on the Train* beats the real *It* reviews.
+This is exactly the "retrieval returns reviews from the wrong book" risk I wrote about in
+`planning.md`.
 
-**What you would change to fix it:** (1) **Metadata filtering** — detect the book named in
-the query and filter retrieval to chunks from that source file (ChromaDB `where` clause on
-the `source`/`book_title` metadata I already store). (2) **Prepend the book title to each
-chunk's text before embedding** so the title contributes to the embedding and same-book
-chunks score higher. (3) **Hybrid search** — combine semantic similarity with a keyword
-(BM25) match on the title to break ties toward the right book.
+**How I would fix it:** (1) **Metadata filtering** — find the book named in the question and
+only search chunks from that book (a ChromaDB `where` filter on the `source`/`book_title`
+metadata I already save). (2) **Add the book title to each chunk before embedding** so the
+title is part of the embedding and same-book chunks score higher. (3) **Hybrid search** —
+mix semantic search with a keyword (BM25) match on the title to push the right book up.
 
 ---
 
 ## Spec Reflection
 
-**One way the spec helped you during implementation:** Writing the Chunking Strategy and
-Retrieval Approach sections of `planning.md` before coding gave the AI tool exact targets
-(250-char chunks, 50 overlap, `all-MiniLM-L6-v2`, top-k 5, ChromaDB with source metadata),
-so the generated `ingestion.py` and `retrieval.py` matched my design on the first pass
-instead of producing generic defaults. The Anticipated Challenges section also paid off:
-because I had predicted "retrieval returns reviews from the wrong book," I immediately
-recognized the *It* pacing result as that known risk rather than a mysterious bug, and I
-already had source metadata attached to every chunk to support the fix.
+**One way the spec helped me:** Writing the Chunking Strategy and Retrieval Approach parts of
+`planning.md` before coding gave the AI tool clear targets (250-character chunks, 50 overlap,
+`all-MiniLM-L6-v2`, top-5, ChromaDB with source metadata). So the generated `ingestion.py`
+and `retrieval.py` matched my plan from the start instead of using generic defaults. The
+Anticipated Challenges part also helped: because I had predicted "retrieval returns reviews
+from the wrong book," I quickly recognized the *It* pacing result as a known risk, not a
+random bug — and I already had source metadata on every chunk to support a future fix.
 
-**One way your implementation diverged from the spec, and why:** The spec said to store an
-integer star `rating` per chunk, but I discovered during chunk inspection that some reviews
-are rated `4.5 stars`. My original review-parsing regex only matched whole numbers, so
-those reviews were silently swallowed (header text leaked into chunks and review counts were
-off). I changed the implementation to parse **fractional ratings** and store `rating` as a
-float — a divergence from the spec's integer assumption, made because the real data didn't
-fit the original assumption.
+**One way my implementation was different from the spec:** The spec assumed each review has a
+whole-number star rating, so I planned to store `rating` as an integer. While checking chunks,
+I found some reviews are rated `4.5 stars`. My first regex only matched whole numbers, so
+those reviews were skipped and their header text leaked into chunks. I changed the code to
+read fractional ratings and store `rating` as a float. This was different from the plan, but I
+made the change because the real data did not match my first assumption.
 
 ---
 
 ## AI Usage
 
 **Instance 1 — Ingestion and chunking**
-- *What I gave the AI:* My `planning.md` Documents and Chunking Strategy sections plus the
-  architecture diagram, and the actual format of my review files (title header + `REVIEW N
-  (M stars):` markers).
-- *What it produced:* `ingestion.py` — loading all 8 files, splitting them into individual
-  reviews with rating/number metadata, and chunking with `RecursiveCharacterTextSplitter`
-  at `chunk_size=250`, `chunk_overlap=50`.
-- *What I changed or overrode:* During the required chunk-inspection step I found a
-  `REVIEW 4 (4.5 stars):` header leaking into a chunk — the regex only matched whole-number
-  ratings. I directed the fix to handle fractional ratings and store the rating as a float,
-  which recovered a previously-dropped review (Then She Was Gone went from 7 → 8 reviews).
+- *What I gave the AI:* The Documents and Chunking Strategy parts of my `planning.md`, the
+  pipeline diagram, and the real format of my review files (a title line plus
+  `REVIEW N (M stars):` markers).
+- *What it produced:* `ingestion.py` — it loads all 8 files, splits them into single reviews
+  with rating and number metadata, and chunks them with `RecursiveCharacterTextSplitter` at
+  `chunk_size=250`, `chunk_overlap=50`.
+- *What I changed:* During the chunk-inspection step I found a `REVIEW 4 (4.5 stars):` header
+  leaking into a chunk because the regex only matched whole-number ratings. I directed the fix
+  to handle fractional ratings and store the rating as a float. This recovered a review that
+  had been dropped (Then She Was Gone went from 7 to 8 reviews).
 
 **Instance 2 — Embedding, retrieval, and grounded generation**
-- *What I gave the AI:* My Retrieval Approach section and the requirement that responses be
-  grounded and cite sources.
-- *What it produced:* `retrieval.py` (embedding with `all-MiniLM-L6-v2`, ChromaDB storage,
-  `retrieve(query, k=5)`) and `generate.py` (the grounding prompt + Groq call).
-- *What I changed or overrode:* I had the vector store configured for **cosine distance**
-  (rather than the default L2) so scores fall in an interpretable 0–2 range and line up with
-  the "good < 0.5" threshold I used to judge retrieval. I also required source attribution
-  to be **appended programmatically** from metadata rather than trusting the LLM to cite
-  sources, and suppressed citations on out-of-scope refusals.
+- *What I gave the AI:* My Retrieval Approach section and the rule that answers must be
+  grounded and must cite sources.
+- *What it produced:* `retrieval.py` (embed with `all-MiniLM-L6-v2`, store in ChromaDB,
+  `retrieve(query, k=5)`) and `generate.py` (the grounding prompt and the Groq call).
+- *What I changed:* I set the vector store to use **cosine distance** (not the default L2) so
+  the scores are easy to read (0–2) and match the "under 0.5 is good" rule I use. I also made
+  source attribution happen in **code** from the metadata, instead of trusting the model to
+  cite sources, and I turned off citations when the answer is an out-of-scope refusal.

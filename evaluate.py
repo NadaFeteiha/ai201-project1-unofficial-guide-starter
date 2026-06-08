@@ -17,30 +17,30 @@ from generate import ask
 # Each entry mirrors the Evaluation Plan table in planning.md.
 TEST_CASES = [
     {
-        "question": "Is And Then There Were None good for first-time mystery readers?",
-        "expected": "Yes — multiple reviewers recommend it as a starting point for "
-                    "the genre and for Agatha Christie specifically.",
+        "question": "Is And Then There Were None a good first mystery book to read?",
+        "expected": "Yes — reviewers say it is a good place to start the genre and a "
+                    "good Agatha Christie book to begin with.",
     },
     {
-        "question": "What are common complaints about Agatha Christie's writing style?",
-        "expected": "Sterile/bland writing, carbon-copy characters that are hard to "
-                    "distinguish, lack of descriptive narration, and racist/sexist "
-                    "attitudes that have not aged well.",
+        "question": "What do readers complain about in Agatha Christie's writing?",
+        "expected": "Plain/sterile writing, similar characters that are hard to tell "
+                    "apart, little description, and old-fashioned attitudes that have "
+                    "not aged well.",
     },
     {
         "question": "What do readers say about the pacing of It by Stephen King?",
-        "expected": "Many readers find the book too long (1000+ pages) and bloated, "
-                    "though fans argue the length is needed for character development.",
+        "expected": "Many readers say it is too long (1000+ pages) and bloated, though "
+                    "fans say the length is needed for the characters.",
     },
     {
         "question": "Which book do readers compare most to Gone Girl?",
-        "expected": "The Girl on the Train — reviewers say it was marketed as "
+        "expected": "The Girl on the Train — reviewers say it was called "
                     "'the next Gone Girl'.",
     },
     {
         "question": "What do readers say about the ending of Gone Girl?",
-        "expected": "Out-of-scope: Gone Girl is not in the document set. The system "
-                    "should decline to answer rather than hallucinate.",
+        "expected": "Out-of-scope: Gone Girl is not in the documents. The system should "
+                    "refuse to answer instead of making something up.",
     },
 ]
 
