@@ -21,8 +21,11 @@ DOCUMENTS_DIR = "documents"
 CHUNK_SIZE = 250
 CHUNK_OVERLAP = 50
 
-# Matches "REVIEW 3 (5 stars):" and captures the number and the rating.
-REVIEW_HEADER = re.compile(r"REVIEW\s+(\d+)\s*\((\d+)\s*stars?\)\s*:", re.IGNORECASE)
+# Matches "REVIEW 3 (5 stars):" or "REVIEW 4 (4.5 stars):" and captures
+# the review number and the (possibly fractional) rating.
+REVIEW_HEADER = re.compile(
+    r"REVIEW\s+(\d+)\s*\((\d+(?:\.\d+)?)\s*stars?\)\s*:", re.IGNORECASE
+)
 
 
 def load_documents(documents_dir=DOCUMENTS_DIR):
@@ -61,7 +64,7 @@ def parse_reviews(doc):
             reviews.append(
                 {
                     "review_number": int(m.group(1)),
-                    "rating": int(m.group(2)),
+                    "rating": float(m.group(2)),
                     "text": text,
                 }
             )
